@@ -7,13 +7,8 @@ import (
 	"sync/atomic"
 )
 
-type PacketConn interface {
-	ReadFrom(p []byte) (n int, addr net.Addr, err error)
-	WriteTo(p []byte, addr net.Addr) (n int, err error)
-}
-
-func Server(tun io.ReadWriter, c PacketConn, key []byte) {
-	var cAddr atomic.Value
+func Server(tun io.ReadWriter, c net.PacketConn, key []byte) {
+	var cAddr atomic.Pointer[net.UDPAddr]
 
 	go func() {
 		buf := make([]byte, 1500)
@@ -31,7 +26,7 @@ func Server(tun io.ReadWriter, c PacketConn, key []byte) {
 
 			if a := cAddr.Load(); a != nil {
 				xor(b, key)
-				_, err := c.WriteTo(b, a.(net.Addr))
+				_, err := c.WriteTo(b, a)
 				if err != nil {
 					log.Println("WriteTo err:", err)
 					cAddr.Store(nil)
@@ -40,8 +35,8 @@ func Server(tun io.ReadWriter, c PacketConn, key []byte) {
 		}
 	}()
 
+	buf := make([]byte, 1500)
 	for {
-		buf := make([]byte, 1500)
 		n, addr, err := c.ReadFrom(buf)
 		if err != nil {
 			log.Println("ReadFrom err:", err)
@@ -55,7 +50,7 @@ func Server(tun io.ReadWriter, c PacketConn, key []byte) {
 
 		xor(b, key)
 
-		cAddr.Store(addr)
+		cAddr.Store(addr.(*net.UDPAddr))
 
 		if _, err := tun.Write(b); err != nil {
 			log.Println("tun write err:", err)
