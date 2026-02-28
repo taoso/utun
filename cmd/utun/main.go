@@ -35,6 +35,10 @@ func main() {
 		log.Fatal(err)
 	}
 
+	if len(key)%8 != 0 {
+		log.Fatal("The length of key must a multiple of 8")
+	}
+
 	cfg := water.Config{DeviceType: water.TUN}
 	tun, err := water.New(cfg)
 	if err != nil {

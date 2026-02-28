@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"sync/atomic"
+	"unsafe"
 )
 
 type PacketConn interface {
@@ -30,7 +31,7 @@ func Server(tun io.ReadWriter, c PacketConn, key []byte) {
 			b := buf[:n]
 
 			if a := cAddr.Load(); a != nil {
-				xor(b, key)
+				xor2(b, key)
 				_, err := c.WriteTo(b, a.(net.Addr))
 				if err != nil {
 					log.Println("WriteTo err:", err)
@@ -40,8 +41,8 @@ func Server(tun io.ReadWriter, c PacketConn, key []byte) {
 		}
 	}()
 
+	buf := make([]byte, 1500)
 	for {
-		buf := make([]byte, 1500)
 		n, addr, err := c.ReadFrom(buf)
 		if err != nil {
 			log.Println("ReadFrom err:", err)
@@ -53,7 +54,7 @@ func Server(tun io.ReadWriter, c PacketConn, key []byte) {
 
 		b := buf[:n]
 
-		xor(b, key)
+		xor2(b, key)
 
 		cAddr.Store(addr)
 
@@ -79,7 +80,7 @@ func Client(tun, conn io.ReadWriter, key []byte) {
 
 			b := buf[:n]
 
-			xor(b, key)
+			xor2(b, key)
 
 			if _, err := conn.Write(b); err != nil {
 				log.Println("UDP write err:", err)
@@ -99,7 +100,7 @@ func Client(tun, conn io.ReadWriter, key []byte) {
 		}
 
 		b := buf[:n]
-		xor(b, key)
+		xor2(b, key)
 
 		if _, err := tun.Write(b); err != nil {
 			log.Println("tun write err:", err)
@@ -112,11 +113,36 @@ func xor(data, key []byte) {
 		return
 	}
 	j := 0
-	for i := 0; i < len(data); i++ {
+	for i := range data {
 		data[i] ^= key[j]
 		j += 1
 		if j >= len(key) {
 			j = 0
 		}
+	}
+}
+
+// 注意：这里假设 key 长度是 8 的倍数。
+func xor2(data, key []byte) {
+	dataLen := len(data)
+	if dataLen == 0 {
+		return
+	}
+
+	keyLen := len(key)
+	if keyLen == 0 {
+		return
+	}
+	mask := keyLen - 1
+
+	i := 0
+
+	for ; i <= dataLen-8; i += 8 {
+		k64 := *(*uint64)(unsafe.Pointer(&key[i&mask]))
+		*(*uint64)(unsafe.Pointer(&data[i])) ^= k64
+	}
+
+	for ; i < dataLen; i++ {
+		data[i] ^= key[i&mask]
 	}
 }

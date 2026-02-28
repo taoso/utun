@@ -2,6 +2,7 @@ package utun
 
 import (
 	"bytes"
+	"crypto/rand"
 	"testing"
 )
 
@@ -40,5 +41,47 @@ func TestXor(t *testing.T) {
 		if !bytes.Equal(c.data, c.result) {
 			t.Fatal("invalid result", i, c.data)
 		}
+	}
+}
+
+func TestXor2(t *testing.T) {
+	key := make([]byte, 32)
+	rand.Read(key)
+
+	data := make([]byte, 256)
+	rand.Read(data)
+
+	data2 := make([]byte, 256)
+	copy(data2, data)
+
+	xor(data, key)
+	xor2(data, key)
+
+	if !bytes.Equal(data, data2) {
+		t.Fatal("invalid result", data)
+	}
+}
+
+func BenchmarkXor(b *testing.B) {
+	key := make([]byte, 32)
+	rand.Read(key)
+
+	data := make([]byte, 256)
+	rand.Read(data)
+
+	for range b.N {
+		xor(data, key)
+	}
+}
+
+func BenchmarkXor2(b *testing.B) {
+	key := make([]byte, 32)
+	rand.Read(key)
+
+	data := make([]byte, 256)
+	rand.Read(data)
+
+	for range b.N {
+		xor2(data, key)
 	}
 }
