@@ -4,12 +4,13 @@ import (
 	"io"
 	"log"
 	"net"
+	"net/netip"
 	"sync/atomic"
 	"unsafe"
 )
 
-func Server(tun io.ReadWriter, c net.PacketConn, key []byte) {
-	var cAddr atomic.Value
+func Server(tun io.ReadWriter, c *net.UDPConn, key []byte) {
+	var cAddr atomic.Pointer[netip.AddrPort]
 
 	go func() {
 		buf := make([]byte, 1500)
@@ -27,7 +28,7 @@ func Server(tun io.ReadWriter, c net.PacketConn, key []byte) {
 
 			if a := cAddr.Load(); a != nil {
 				xor2(b, key)
-				_, err := c.WriteTo(b, a.(net.Addr))
+				_, err := c.WriteToUDPAddrPort(b, *a)
 				if err != nil {
 					log.Println("WriteTo err:", err)
 					cAddr.Store(nil)
@@ -38,7 +39,7 @@ func Server(tun io.ReadWriter, c net.PacketConn, key []byte) {
 
 	buf := make([]byte, 1500)
 	for {
-		n, addr, err := c.ReadFrom(buf)
+		n, addr, err := c.ReadFromUDPAddrPort(buf)
 		if err != nil {
 			log.Println("ReadFrom err:", err)
 		}
@@ -51,7 +52,9 @@ func Server(tun io.ReadWriter, c net.PacketConn, key []byte) {
 
 		xor2(b, key)
 
-		cAddr.Store(addr)
+		if old := cAddr.Load(); old == nil || *old != addr {
+			cAddr.Store(&addr)
+		}
 
 		if _, err := tun.Write(b); err != nil {
 			log.Println("tun write err:", err)

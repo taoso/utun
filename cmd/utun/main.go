@@ -59,7 +59,7 @@ func main() {
 		}
 		defer c.Close()
 
-		utun.Server(tun, c, key)
+		utun.Server(tun, c.(*net.UDPConn), key)
 	} else if connect != "" {
 		c, err := net.Dial("udp", connect)
 		if err != nil {
